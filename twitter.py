@@ -1,11 +1,28 @@
 # Autenticación con Twitter y seguimiento con Twitter Streaming API
 import rx
+
+
 from rx import create, operators
 from tweepy import OAuthHandler, Stream, StreamListener
 from tkinter import *
 import json
 from textblob import TextBlob
 from googletrans import Translator
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk import sentiment
+from nltk import word_tokenize
+import smtplib
+import pandas as pd
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+
+UsernameExcel = list()
+TextExcel = list()
+LocationExcel = list()
+DateExcel = list()
+
 
 def insert_tweet(tweet,text):
 
@@ -23,15 +40,39 @@ def parse_tweet(t):
     text = t["text"] if 'text' in t else ''
     location = t["user"]["location"]
     date = t["created_at"]
+    rts = t["retweet_count"]
+    favoritos =t["favorite_count"]
 
-    translator = Translator()
-    ar = translator.translate(text).text
+
+
+
+
+
+    analizador = SentimentIntensityAnalyzer()
+
+
+
+    if t["user"]["lang"]!='en':
+        translator = Translator()
+        ar = translator.translate(text).text
+        sentimiento= analizador.polarity_scores(ar)['compound']
+
+    else:
+
+        sentimiento=analizador.polarity_scores(text)['compound']
+
+    if sentimiento < -0.05:
+        UsernameExcel.append(username)
+        TextExcel.append(text)
+        LocationExcel.append(location)
+        DateExcel.append(date)
+
+
 
 
     return {
-        'text': f'Usuario: {username} \nLocalizacion: {location }\nFecha: {date} \nTweet: {text}\n\n',
-        'sentiment': TextBlob(ar).sentiment.polarity
-
+        'text': f'Usuario: {username} \nLocalizacion: {location }\nFecha: {date} \nTweet: {text}\nRTs: {rts}\nFavoritos: {favoritos}\n Sentimiento:{sentimiento}',
+        'sentiment': sentimiento
     }
 
 def mi_observable(keywords):
@@ -52,8 +93,8 @@ def mi_observable(keywords):
         listener = TweetListener()
         auth = OAuthHandler(consumer_key, consumer_secret)
         auth.set_access_token(access_token, access_token_secret)
-        stream = Stream(auth, listener)
-        stream.filter(track=keywords, is_async=True, languages=['en','es'])
+        stream = Stream(auth, listener, tweet_mode='extended')
+        stream.filter(track=keywords, is_async=True, languages=['en'])
 
     return create(observe_tweets)
 
@@ -63,8 +104,7 @@ class App:
         self.__contador = 0
         self.window = Tk()
         self.window.title('BÚSQUEDA DE TWEETS')
-        self.window.geometry('1920x1080')
-        self.window.resizable(True, True)
+        self.window.resizable(False, False)
 
         Label(text='Término de búsqueda').grid(column=0, row=0)
 
@@ -77,6 +117,7 @@ class App:
         self.txt = Text(bg='#ffffff')
 
         self.txt.grid(row=2, column=0, columnspan=2)
+
         self.txt.tag_config('negativo', background='white', foreground='red')
         self.txt.tag_config('neutral', background='white', foreground='black')
         self.txt.tag_config('positivo', background='white', foreground='green')
@@ -90,11 +131,84 @@ class App:
         ).subscribe(on_next=lambda t:insert_tweet(t, self.txt), on_error=lambda e: print(e))
 
     def terminarButton(self):
-        exit()
+        self.window.quit()
+
+
+def envioMail():
+    # Iniciamos los parámetros del script
+    remitente = 'twitterosintdata@gmail.com'
+    destinatarios = ['twitterosintdata@gmail.com']
+    asunto = '[RPI] Correo de prueba'
+    cuerpo = 'Este es el contenido del mensaje'
+    ruta_adjunto = 'tweets.xlsx'
+    nombre_adjunto = 'tweets.xlsx'
+
+    # Creamos el objeto mensaje
+    mensaje = MIMEMultipart()
+
+    # Establecemos los atributos del mensaje
+    mensaje['From'] = remitente
+    mensaje['To'] = ", ".join(destinatarios)
+    mensaje['Subject'] = asunto
+
+    # Agregamos el cuerpo del mensaje como objeto MIME de tipo texto
+    mensaje.attach(MIMEText(cuerpo, 'plain'))
+
+    # Abrimos el archivo que vamos a adjuntar
+    archivo_adjunto = open(ruta_adjunto, 'rb')
+
+    # Creamos un objeto MIME base
+    adjunto_MIME = MIMEBase('application', 'octet-stream')
+    # Y le cargamos el archivo adjunto
+    adjunto_MIME.set_payload((archivo_adjunto).read())
+    # Codificamos el objeto en BASE64
+    encoders.encode_base64(adjunto_MIME)
+    # Agregamos una cabecera al objeto
+    adjunto_MIME.add_header('Content-Disposition', "attachment; filename= %s" % nombre_adjunto)
+    # Y finalmente lo agregamos al mensaje
+    mensaje.attach(adjunto_MIME)
+
+    # Creamos la conexión con el servidor
+    sesion_smtp = smtplib.SMTP('64.233.184.108')
+
+    # Ciframos la conexión
+    sesion_smtp.starttls()
+
+    # Iniciamos sesión en el servidor
+    sesion_smtp.login('twitterosintdata@gmail.com', 'mohoric99')
+
+    # Convertimos el objeto mensaje a texto
+    texto = mensaje.as_string()
+
+    # Enviamos el mensaje
+    sesion_smtp.sendmail(remitente, destinatarios, texto)
+
+    # Cerramos la conexión
+    sesion_smtp.quit()
+
+
+
+
+
+def pasarExcel():
+
+    for i in range(0,len(LocationExcel)-1):
+
+        if LocationExcel[i] is None:
+            LocationExcel[i] = 'No se ha proporcionado una ubicación'
+
+
+    d = (
+        {"Usuario": UsernameExcel, "Tweet": TextExcel, "Ubicación": LocationExcel, "Fecha": DateExcel}
+    )
+
+    df = pd.DataFrame(data=d)
+
+    df.to_excel('tweets.xlsx', index=False, header=True)
 
 
 if __name__ == '__main__':
     App()
-
-
+    pasarExcel()
+    envioMail()
 
