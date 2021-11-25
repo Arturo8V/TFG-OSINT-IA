@@ -6,11 +6,8 @@ from rx import create, operators
 from tweepy import OAuthHandler, Stream, StreamListener
 from tkinter import *
 import json
-from textblob import TextBlob
 from googletrans import Translator
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from nltk import sentiment
-from nltk import word_tokenize
 import smtplib
 import pandas as pd
 from email.mime.multipart import MIMEMultipart
@@ -22,6 +19,9 @@ UsernameExcel = list()
 TextExcel = list()
 LocationExcel = list()
 DateExcel = list()
+DataDispositivo=list()
+DataDescripcion=list()
+DataLink=list()
 
 
 def insert_tweet(tweet,text):
@@ -36,21 +36,34 @@ def insert_tweet(tweet,text):
 
 
 def parse_tweet(t):
+
+
     username = t["user"]["name"] if 'user' in t else 'Anónimo'
-    text = t["text"] if 'text' in t else ''
+
+    text = t["text"]
+
+    if "retweeted_status" in t:
+
+        if 'extended_tweet' in t["retweeted_status"]:
+            usuario=t["retweeted_status"]["user"]["name"]
+            text ="RT @" + usuario + t["retweeted_status"]["extended_tweet"]["full_text"]
+
+    if 'extended_tweet' in t:
+        text = t["extended_tweet"]["full_text"]
+
     location = t["user"]["location"]
     date = t["created_at"]
     rts = t["retweet_count"]
-    favoritos =t["favorite_count"]
+    favoritos = t["favorite_count"]
+    dispositivo = t["source"]
+    dispositivo=dispositivo.split('"')
+    dispositivo=dispositivo[4]
+    dispositivo = re.sub("\</a|\>", "", dispositivo)
 
-
-
-
-
+    description=t["user"]["description"]
+    link= "https://twitter.com/twitter/statuses/"+ str(t["id"])
 
     analizador = SentimentIntensityAnalyzer()
-
-
 
     if t["user"]["lang"]!='en':
         translator = Translator()
@@ -61,17 +74,23 @@ def parse_tweet(t):
 
         sentimiento=analizador.polarity_scores(text)['compound']
 
+
     if sentimiento < -0.05:
-        UsernameExcel.append(username)
-        TextExcel.append(text)
-        LocationExcel.append(location)
-        DateExcel.append(date)
 
+        if text not in TextExcel:
 
+            UsernameExcel.append(username)
+            TextExcel.append(text)
+            LocationExcel.append(location)
+            DateExcel.append(date)
+            DataDispositivo.append(dispositivo)
+            DataDescripcion.append(description)
+            DataLink.append(link)
 
 
     return {
-        'text': f'Usuario: {username} \nLocalizacion: {location }\nFecha: {date} \nTweet: {text}\nRTs: {rts}\nFavoritos: {favoritos}\n Sentimiento:{sentimiento}',
+        'text': f'Usuario: {username} \nLocalizacion: {location }\nFecha: {date} \nTweet: {text}\nRTs: {rts}\nFavoritos: {favoritos}\n'
+                f'Dispositivo: {dispositivo}\nDescripcion: {description}\nLink del tweet: {link}\nSentimiento:{sentimiento}',
         'sentiment': sentimiento
     }
 
@@ -93,7 +112,7 @@ def mi_observable(keywords):
         listener = TweetListener()
         auth = OAuthHandler(consumer_key, consumer_secret)
         auth.set_access_token(access_token, access_token_secret)
-        stream = Stream(auth, listener, tweet_mode='extended')
+        stream = Stream(auth, listener)
         stream.filter(track=keywords, is_async=True, languages=['en'])
 
     return create(observe_tweets)
@@ -197,9 +216,14 @@ def pasarExcel():
         if LocationExcel[i] is None:
             LocationExcel[i] = 'No se ha proporcionado una ubicación'
 
+        if DataDescripcion[i] is None:
+            DataDescripcion[i] = 'No se ha proporcionado una descripcion'
+
+
+
 
     d = (
-        {"Usuario": UsernameExcel, "Tweet": TextExcel, "Ubicación": LocationExcel, "Fecha": DateExcel}
+        {"Usuario": UsernameExcel, "Tweet": TextExcel, "Ubicación": LocationExcel, "Fecha": DateExcel, "Dispositivo": DataDispositivo, "Descripcion": DataDescripcion, "Link": DataLink}
     )
 
     df = pd.DataFrame(data=d)
