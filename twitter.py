@@ -1,7 +1,5 @@
 # Autenticación con Twitter y seguimiento con Twitter Streaming API
-import rx
-
-
+from collections import Counter
 from rx import create, operators
 from tweepy import OAuthHandler, Stream, StreamListener
 from tkinter import *
@@ -14,6 +12,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+import sys
 
 UsernameExcel = list()
 TextExcel = list()
@@ -23,8 +22,8 @@ DataDispositivo=list()
 DataDescripcion=list()
 DataLink=list()
 
-
 def insert_tweet(tweet,text):
+
 
     if tweet['sentiment'] < -0.05:
         mood = 'negativo'
@@ -112,8 +111,10 @@ def mi_observable(keywords):
         listener = TweetListener()
         auth = OAuthHandler(consumer_key, consumer_secret)
         auth.set_access_token(access_token, access_token_secret)
+        global stream
         stream = Stream(auth, listener)
         stream.filter(track=keywords, is_async=True, languages=['en'])
+
 
     return create(observe_tweets)
 
@@ -125,13 +126,10 @@ class App:
         self.window.title('BÚSQUEDA DE TWEETS')
         self.window.resizable(False, False)
 
-        Label(text='Término de búsqueda').grid(column=0, row=0)
-
-        Button(text='Buscar', width=35, command=self.searchButton).grid(column=0, row=1, columnspan=1)
-        Button(text='Terminar', width=35, command=self.terminarButton).grid(column=1, row=1, columnspan=1)
+        #Button(text='Buscar', width=35, command=self.search).grid(column=0, row=0, columnspan=1)
+        Button(text='Terminar', width=35, command=self.terminarButton).grid(column=1, row=0, columnspan=1)
 
         self.entry = Entry()
-        self.entry.grid(column=1, row=0)
 
         self.txt = Text(bg='#ffffff')
 
@@ -141,16 +139,19 @@ class App:
         self.txt.tag_config('neutral', background='white', foreground='black')
         self.txt.tag_config('positivo', background='white', foreground='green')
 
+        self.search()
+
         self.window.mainloop()
 
-    def searchButton(self):
-        mi_observable([self.entry.get()]).pipe(
+    def search(self):
+        mi_observable(sys.argv[1]).pipe(
             operators.map(lambda txt: json.loads(txt)),
             operators.map(lambda d: parse_tweet(d))
-        ).subscribe(on_next=lambda t:insert_tweet(t, self.txt), on_error=lambda e: print(e))
+        ).subscribe(on_next=lambda t: insert_tweet(t, self.txt), on_error=lambda e: print(e))
 
     def terminarButton(self):
-        self.window.quit()
+        stream.disconnect()
+        #self.window.quit()
 
 
 def envioMail():
@@ -228,11 +229,35 @@ def pasarExcel():
 
     df = pd.DataFrame(data=d)
 
+
+
     df.to_excel('tweets.xlsx', index=False, header=True)
 
 
+def graficaLocalizacion():
+
+    localizaciones=Counter(LocationExcel)
+
+    d=  (
+        {"Hola":localizaciones}
+    )
+
+    df= pd.DataFrame(data=d)
+
+    df.plot(kind='bar')
+
+
 if __name__ == '__main__':
-    App()
-    pasarExcel()
-    envioMail()
+
+    if(len(sys.argv)<2):
+        print("ERROR - Introduce una palabra para buscar - EJEMPLO python twitter.py hola")
+
+    else:
+        print ("Número de parámetros: ", len(sys.argv))
+        print ("Lista de argumentos: ", sys.argv)
+        print(sys.argv[1])
+        App()
+        pasarExcel()
+        envioMail()
+        #graficaLocalizacion()
 
