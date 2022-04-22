@@ -95,10 +95,10 @@ def parse_tweet(t):
 
 def mi_observable(keywords):
 
-    consumer_key = "sWRtWGpLlv23MVVrnarKgYZIC"
-    access_token = "2820286426-loksPpNPz2MLIuowV7WDDr7keEYk0S60XxASnuG"
-    consumer_secret = "BZvea0H19Zp4V7xZxM7zGSO6FevKTMywzdZQfdM3iVrd0IeYHu"
-    access_token_secret = "z8htgV2brDM307YzpcPYLUGLJo3aua7slsvPIY5F5i76u"
+    consumer_key = "ck"
+    access_token = "at"
+    consumer_secret = "cs"
+    access_token_secret = "ac"
 
     def observe_tweets(o, s):
         class TweetListener (StreamListener):
@@ -195,7 +195,7 @@ def envioMail():
     sesion_smtp.starttls()
 
     # Iniciamos sesión en el servidor
-    sesion_smtp.login('twitterosintdata@gmail.com', 'mohoric99')
+    sesion_smtp.login('twitterosintdata@gmail.com', 'contraseña')
 
     # Convertimos el objeto mensaje a texto
     texto = mensaje.as_string()
